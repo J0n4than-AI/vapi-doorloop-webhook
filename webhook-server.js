@@ -48,9 +48,106 @@ function getCurrentDate() {
   return new Date().toISOString();
 }
 
+// Helper function: Authenticate tenant against DoorLoop
+async function authenticateTenant(unitNumber, tenantName) {
+  try {
+    // Get units to find the unit ID by unit number/name
+    const unitsResponse = await doorloopClient.get('/units', {
+      params: { search: unitNumber, limit: 10 }
+    });
+
+    if (!unitsResponse.data.data || unitsResponse.data.data.length === 0) {
+      return {
+        authenticated: false,
+        reason: 'Unit not found in system',
+        message: `I'm sorry, I couldn't find unit ${unitNumber} in our system. Please verify the unit number and try again.`
+      };
+    }
+
+    const unit = unitsResponse.data.data.find(u =>
+      u.name?.toLowerCase().includes(unitNumber.toLowerCase()) ||
+      u.reference?.toLowerCase() === unitNumber.toLowerCase()
+    );
+
+    if (!unit) {
+      return {
+        authenticated: false,
+        reason: 'Unit not found',
+        message: `I'm sorry, I couldn't find unit ${unitNumber} in our records. Can you please verify the unit number?`
+      };
+    }
+
+    // Get active leases for this unit
+    const leasesResponse = await doorloopClient.get('/leases', {
+      params: { units: unit.id, status: 'ACTIVE', limit: 10 }
+    });
+
+    if (!leasesResponse.data.data || leasesResponse.data.data.length === 0) {
+      return {
+        authenticated: false,
+        reason: 'No active lease for this unit',
+        message: `I'm sorry, I don't show an active lease for unit ${unitNumber}. Please contact the property manager directly.`
+      };
+    }
+
+    // Get tenant IDs from the active lease
+    const activeLease = leasesResponse.data.data[0];
+
+    // Check if lease has tenant information in the name field
+    const leaseName = activeLease.name?.toLowerCase() || '';
+    const callerName = tenantName.toLowerCase();
+
+    // Split lease name by common separators (& or ,) to get individual tenant names
+    const leaseNames = leaseName.split(/[&,]/).map(n => n.trim());
+
+    // Check if caller's name matches any tenant on the lease
+    const nameMatch = leaseNames.some(leaseTenantName => {
+      // Match if caller name is contained in lease tenant name or vice versa
+      return leaseTenantName.includes(callerName) || callerName.includes(leaseTenantName);
+    });
+
+    if (!nameMatch) {
+      return {
+        authenticated: false,
+        reason: 'Name does not match tenant on lease',
+        message: `I'm sorry, I don't show ${tenantName} as a tenant for unit ${unitNumber}. For security reasons, I can only process requests from authorized tenants. Please contact the property manager if you believe this is an error.`
+      };
+    }
+
+    // Authentication successful
+    return {
+      authenticated: true,
+      unitId: unit.id,
+      unitName: unit.name,
+      leaseId: activeLease.id,
+      message: 'Tenant authenticated successfully'
+    };
+
+  } catch (error) {
+    console.error('Error authenticating tenant:', error.response?.data || error.message);
+    return {
+      authenticated: false,
+      reason: 'Authentication system error',
+      message: 'I\'m experiencing technical difficulties verifying your information. Please contact the property manager directly for assistance.'
+    };
+  }
+}
+
 // Tool Handler: createWorkOrder
 async function handleCreateWorkOrder(params) {
   const { unitNumber, tenantName, tenantPhone, issueDescription, urgency, category, whenStarted } = params;
+
+  // Authenticate tenant first
+  const authResult = await authenticateTenant(unitNumber, tenantName);
+
+  if (!authResult.authenticated) {
+    return {
+      success: false,
+      error: 'Authentication failed',
+      reason: authResult.reason,
+      message: authResult.message
+    };
+  }
 
   const taskData = {
     subject: `${category} - ${unitNumber}: ${issueDescription.substring(0, 50)}${issueDescription.length > 50 ? '...' : ''}`,
@@ -78,6 +175,18 @@ async function handleCreateWorkOrder(params) {
 // Tool Handler: escalateToEmergency
 async function handleEscalateToEmergency(params) {
   const { unitNumber, tenantName, tenantPhone, issueDescription, category, safetyNotes } = params;
+
+  // Authenticate tenant first
+  const authResult = await authenticateTenant(unitNumber, tenantName);
+
+  if (!authResult.authenticated) {
+    return {
+      success: false,
+      error: 'Authentication failed',
+      reason: authResult.reason,
+      message: authResult.message
+    };
+  }
 
   const taskData = {
     subject: `🚨 EMERGENCY - ${category} - ${unitNumber}`,
