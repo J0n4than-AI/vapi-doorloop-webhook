@@ -527,64 +527,88 @@ app.post('/vapi/webhook', async (req, res) => {
   try {
     const { message } = req.body;
 
-    if (!message || message.type !== 'function-call') {
+    if (!message || message.type !== 'tool-calls') {
       console.error('❌ Invalid request: Missing or wrong message type');
+      console.error('Expected: "tool-calls", Got:', message?.type);
       return res.status(400).json({
-        error: 'Invalid request: Expected function-call message type'
+        error: 'Invalid request: Expected tool-calls message type'
       });
     }
 
-    const { functionCall } = message;
-    const { name, parameters } = functionCall;
+    const { toolCallList } = message;
 
-    console.log(`\n🔧 Function called: ${name}`);
-    console.log('Parameters:', JSON.stringify(parameters, null, 2));
-
-    let result;
-
-    // Route to appropriate handler
-    switch (name) {
-      case 'createWorkOrder':
-        console.log('→ Routing to handleCreateWorkOrder');
-        result = await handleCreateWorkOrder(parameters);
-        console.log('← handleCreateWorkOrder result:', JSON.stringify(result, null, 2));
-        break;
-
-      case 'escalateToEmergency':
-        result = await handleEscalateToEmergency(parameters);
-        break;
-
-      case 'dispatchEmergencyVendor':
-        result = await handleDispatchEmergencyVendor(parameters);
-        break;
-
-      case 'provideStatus':
-        result = await handleProvideStatus(parameters);
-        break;
-
-      case 'confirmCompletion':
-        result = await handleConfirmCompletion(parameters);
-        break;
-
-      case 'reopenWorkOrder':
-        result = await handleReopenWorkOrder(parameters);
-        break;
-
-      case 'scheduleInspection':
-        result = await handleScheduleInspection(parameters);
-        break;
-
-      default:
-        return res.status(400).json({
-          error: `Unknown function: ${name}`
-        });
+    if (!toolCallList || toolCallList.length === 0) {
+      console.error('❌ No tool calls in request');
+      return res.status(400).json({
+        error: 'Invalid request: No tool calls provided'
+      });
     }
 
-    // Return success response
-    console.log(`\n✅ SUCCESS - Returning result to VAPI`);
+    // Process all tool calls and collect results
+    const results = [];
+
+    for (const toolCall of toolCallList) {
+      const { id: toolCallId, name, arguments: params } = toolCall;
+
+      console.log(`\n🔧 Tool called: ${name}`);
+      console.log('Tool Call ID:', toolCallId);
+      console.log('Arguments:', JSON.stringify(params, null, 2));
+
+      let result;
+
+      // Route to appropriate handler
+      switch (name) {
+        case 'createWorkOrder':
+          console.log('→ Routing to handleCreateWorkOrder');
+          result = await handleCreateWorkOrder(params);
+          console.log('← handleCreateWorkOrder result:', JSON.stringify(result, null, 2));
+          break;
+
+        case 'escalateToEmergency':
+          result = await handleEscalateToEmergency(params);
+          break;
+
+        case 'dispatchEmergencyVendor':
+          result = await handleDispatchEmergencyVendor(params);
+          break;
+
+        case 'provideStatus':
+          result = await handleProvideStatus(params);
+          break;
+
+        case 'confirmCompletion':
+          result = await handleConfirmCompletion(params);
+          break;
+
+        case 'reopenWorkOrder':
+          result = await handleReopenWorkOrder(params);
+          break;
+
+        case 'scheduleInspection':
+          result = await handleScheduleInspection(params);
+          break;
+
+        default:
+          result = {
+            success: false,
+            error: `Unknown function: ${name}`
+          };
+      }
+
+      // Add to results array with toolCallId
+      results.push({
+        toolCallId: toolCallId,
+        result: result
+      });
+    }
+
+    // Return success response in VAPI format
+    console.log(`\n✅ SUCCESS - Returning results to VAPI`);
+    console.log('Results:', JSON.stringify(results, null, 2));
     console.log(`${'='.repeat(80)}\n`);
+
     res.json({
-      result: result
+      results: results
     });
 
   } catch (error) {
