@@ -141,16 +141,58 @@ async function authenticateTenant(unitNumber, tenantName) {
       };
     }
 
-    // Authentication successful
+    // Authentication successful - now get tenant ID for creating tenant requests
     console.log('   ✅ AUTHENTICATED');
-    return {
-      authenticated: true,
-      unitId: unit.id,
-      unitName: unit.name,
-      propertyId: unit.property,  // Add property ID for linking tasks
-      leaseId: matchedLease.id,
-      message: 'Tenant authenticated successfully'
-    };
+    console.log('   🔍 Fetching tenant ID...');
+
+    try {
+      // Search for tenant by name to get tenant ID
+      const tenantsResponse = await doorloopClient.get('/tenants', {
+        params: { search: tenantName, limit: 20 }
+      });
+
+      // Find exact tenant match by name
+      const tenant = tenantsResponse.data.data.find(t =>
+        t.name?.toLowerCase().includes(callerName) ||
+        callerName.includes(t.name?.toLowerCase())
+      );
+
+      if (tenant) {
+        console.log(`   ✓ Tenant ID found: ${tenant.id}`);
+        return {
+          authenticated: true,
+          unitId: unit.id,
+          unitName: unit.name,
+          propertyId: unit.property,
+          leaseId: matchedLease.id,
+          tenantId: tenant.id,  // Add tenant ID for TENANT_REQUEST creation
+          tenantName: tenant.name,
+          message: 'Tenant authenticated successfully'
+        };
+      } else {
+        console.log('   ⚠️  Tenant ID not found, will use lease-based creation');
+        return {
+          authenticated: true,
+          unitId: unit.id,
+          unitName: unit.name,
+          propertyId: unit.property,
+          leaseId: matchedLease.id,
+          tenantId: null,  // No tenant ID found
+          message: 'Tenant authenticated successfully'
+        };
+      }
+    } catch (tenantError) {
+      console.log('   ⚠️  Could not fetch tenant ID:', tenantError.message);
+      return {
+        authenticated: true,
+        unitId: unit.id,
+        unitName: unit.name,
+        propertyId: unit.property,
+        leaseId: matchedLease.id,
+        tenantId: null,
+        message: 'Tenant authenticated successfully'
+      };
+    }
 
   } catch (error) {
     console.error('Error authenticating tenant:', error.response?.data || error.message);
@@ -178,34 +220,53 @@ async function handleCreateWorkOrder(params) {
     };
   }
 
+  // Build task data - Create as TENANT_REQUEST so it appears under tenant name
   const taskData = {
     subject: `${category} - ${unitNumber}: ${issueDescription.substring(0, 50)}${issueDescription.length > 50 ? '...' : ''}`,
     description: `Tenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nReported: ${whenStarted || 'Just now'}`,
-    type: 'WORK_ORDER',
+    type: 'TENANT_REQUEST',  // Changed from WORK_ORDER to TENANT_REQUEST
     status: 'NOT_STARTED',
-    unit: authResult.unitId,  // Link to the authenticated unit
-    property: authResult.propertyId || undefined  // Link to property if available
+    unit: authResult.unitId,
+    property: authResult.propertyId,
+    tenantRequestType: 'MAINTENANCE',
+    entryPermission: 'NOT_APPLICABLE'
   };
+
+  // Add tenant ID if available (required for TENANT_REQUEST)
+  if (authResult.tenantId) {
+    taskData.requestedByTenant = authResult.tenantId;
+    taskData.linkedResource = {
+      resourceId: authResult.leaseId,
+      resourceType: 'LEASE'
+    };
+    console.log('Creating TENANT_REQUEST with tenant ID:', authResult.tenantId);
+  } else {
+    // Fallback: If tenant ID not found, create as WORK_ORDER instead
+    console.log('⚠️  No tenant ID available, creating as WORK_ORDER instead');
+    taskData.type = 'WORK_ORDER';
+    delete taskData.tenantRequestType;
+    delete taskData.entryPermission;
+  }
 
   try {
     console.log('Creating DoorLoop task:', JSON.stringify(taskData, null, 2));
     const response = await doorloopClient.post('/tasks', taskData);
-    console.log('✅ Task created:', response.data.id);
+    console.log(`✅ Task created as ${taskData.type}:`, response.data.id);
 
     return {
       success: true,
       workOrderId: response.data.id,
       estimatedResponseTime: urgency === 'urgent' ? '2 hours' : urgency === 'standard' ? '24 hours' : '3-5 days',
       doorloopTaskId: response.data.id,
-      message: 'Work order created successfully in DoorLoop'
+      message: `Maintenance request created successfully in DoorLoop under ${authResult.tenantId ? 'your tenant account' : 'the property'}`
     };
   } catch (error) {
-    console.error('❌ Error creating work order:', error.response?.data || error.message);
+    console.error('❌ Error creating maintenance request:', error.response?.data || error.message);
     return {
       success: false,
-      error: 'Failed to create work order',
+      error: 'Failed to create maintenance request',
       details: error.response?.data || error.message,
-      message: 'I apologize, but I encountered a technical issue while creating your work order. Please contact the property manager directly, or try again in a few minutes.'
+      message: 'I apologize, but I encountered a technical issue while creating your maintenance request. Please contact the property manager directly, or try again in a few minutes.'
     };
   }
 }
@@ -226,27 +287,52 @@ async function handleEscalateToEmergency(params) {
     };
   }
 
+  // Build emergency task data - Create as TENANT_REQUEST so it appears under tenant name
   const taskData = {
     subject: `🚨 EMERGENCY - ${category} - ${unitNumber}`,
     description: `⚠️ EMERGENCY MAINTENANCE REQUEST ⚠️\n\nTenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nSafety Notes:\n${safetyNotes || 'None provided'}\n\nEXPECTED RESPONSE: Vendor should arrive within 1-2 hours\nEXPECTED CALLBACK: Vendor should call tenant within 15 minutes`,
-    type: 'WORK_ORDER',
+    type: 'TENANT_REQUEST',
     status: 'NOT_STARTED',
-    unit: authResult.unitId,  // Link to the authenticated unit
-    property: authResult.propertyId || undefined  // Link to property if available
+    unit: authResult.unitId,
+    property: authResult.propertyId,
+    tenantRequestType: 'MAINTENANCE',
+    entryPermission: 'NOT_APPLICABLE'
   };
+
+  // Add tenant ID if available (required for TENANT_REQUEST)
+  if (authResult.tenantId) {
+    taskData.requestedByTenant = authResult.tenantId;
+    taskData.linkedResource = {
+      resourceId: authResult.leaseId,
+      resourceType: 'LEASE'
+    };
+    console.log('Creating emergency TENANT_REQUEST with tenant ID:', authResult.tenantId);
+  } else {
+    // Fallback: If tenant ID not found, create as WORK_ORDER instead
+    console.log('⚠️  No tenant ID available, creating emergency as WORK_ORDER instead');
+    taskData.type = 'WORK_ORDER';
+    delete taskData.tenantRequestType;
+    delete taskData.entryPermission;
+  }
 
   try {
     const response = await doorloopClient.post('/tasks', taskData);
+    console.log(`✅ Emergency task created as ${taskData.type}:`, response.data.id);
 
     return {
       success: true,
       emergencyWorkOrderId: response.data.id,
-      dispatchStatus: 'Emergency work order created - Property manager must assign vendor',
+      dispatchStatus: `Emergency ${taskData.type === 'TENANT_REQUEST' ? 'tenant request' : 'work order'} created - Property manager must assign vendor`,
       doorloopTaskId: response.data.id
     };
   } catch (error) {
     console.error('Error escalating to emergency:', error.response?.data || error.message);
-    throw error;
+    return {
+      success: false,
+      error: 'Failed to create emergency request',
+      details: error.response?.data || error.message,
+      message: 'I apologize, but I encountered a technical issue while escalating your emergency request. Please call the property manager directly at their emergency number immediately.'
+    };
   }
 }
 
