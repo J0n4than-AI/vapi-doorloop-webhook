@@ -51,12 +51,17 @@ function getCurrentDate() {
 // Helper function: Authenticate tenant against DoorLoop
 async function authenticateTenant(unitNumber, tenantName) {
   try {
+    console.log(`\n🔐 AUTH ATTEMPT: Unit="${unitNumber}", Tenant="${tenantName}"`);
+
     // Get units to find the unit ID by unit number/name
     const unitsResponse = await doorloopClient.get('/units', {
       params: { search: unitNumber, limit: 10 }
     });
 
+    console.log(`   Units found: ${unitsResponse.data.data?.length || 0}`);
+
     if (!unitsResponse.data.data || unitsResponse.data.data.length === 0) {
+      console.log('   ❌ No units found');
       return {
         authenticated: false,
         reason: 'Unit not found in system',
@@ -70,6 +75,7 @@ async function authenticateTenant(unitNumber, tenantName) {
     );
 
     if (!unit) {
+      console.log('   ❌ Unit not matched in results');
       return {
         authenticated: false,
         reason: 'Unit not found',
@@ -77,12 +83,17 @@ async function authenticateTenant(unitNumber, tenantName) {
       };
     }
 
+    console.log(`   ✓ Unit matched: ${unit.name} (${unit.id})`);
+
     // Get active leases for this unit
     const leasesResponse = await doorloopClient.get('/leases', {
       params: { units: unit.id, status: 'ACTIVE', limit: 10 }
     });
 
+    console.log(`   Active leases: ${leasesResponse.data.data?.length || 0}`);
+
     if (!leasesResponse.data.data || leasesResponse.data.data.length === 0) {
+      console.log('   ❌ No active lease');
       return {
         authenticated: false,
         reason: 'No active lease for this unit',
@@ -92,6 +103,7 @@ async function authenticateTenant(unitNumber, tenantName) {
 
     // Get tenant IDs from the active lease
     const activeLease = leasesResponse.data.data[0];
+    console.log(`   Lease name: "${activeLease.name}"`);
 
     // Check if lease has tenant information in the name field
     const leaseName = activeLease.name?.toLowerCase() || '';
@@ -99,14 +111,19 @@ async function authenticateTenant(unitNumber, tenantName) {
 
     // Split lease name by common separators (& or ,) to get individual tenant names
     const leaseNames = leaseName.split(/[&,]/).map(n => n.trim());
+    console.log(`   Lease tenants: ${JSON.stringify(leaseNames)}`);
+    console.log(`   Caller name (lowercase): "${callerName}"`);
 
     // Check if caller's name matches any tenant on the lease
     const nameMatch = leaseNames.some(leaseTenantName => {
+      const matches = leaseTenantName.includes(callerName) || callerName.includes(leaseTenantName);
+      console.log(`   Comparing "${leaseTenantName}" vs "${callerName}": ${matches ? '✓ MATCH' : '✗ no match'}`);
       // Match if caller name is contained in lease tenant name or vice versa
-      return leaseTenantName.includes(callerName) || callerName.includes(leaseTenantName);
+      return matches;
     });
 
     if (!nameMatch) {
+      console.log('   ❌ Name authentication FAILED');
       return {
         authenticated: false,
         reason: 'Name does not match tenant on lease',
@@ -115,6 +132,7 @@ async function authenticateTenant(unitNumber, tenantName) {
     }
 
     // Authentication successful
+    console.log('   ✅ AUTHENTICATED');
     return {
       authenticated: true,
       unitId: unit.id,
