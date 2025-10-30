@@ -101,32 +101,42 @@ async function authenticateTenant(unitNumber, tenantName) {
       };
     }
 
-    // Get tenant IDs from the active lease
-    const activeLease = leasesResponse.data.data[0];
-    console.log(`   Lease name: "${activeLease.name}"`);
-
-    // Check if lease has tenant information in the name field
-    const leaseName = activeLease.name?.toLowerCase() || '';
+    // Check ALL active leases to find a match (unit may have multiple leases)
     const callerName = tenantName.toLowerCase();
-
-    // Split lease name by common separators (& or ,) to get individual tenant names
-    const leaseNames = leaseName.split(/[&,]/).map(n => n.trim());
-    console.log(`   Lease tenants: ${JSON.stringify(leaseNames)}`);
     console.log(`   Caller name (lowercase): "${callerName}"`);
 
-    // Check if caller's name matches any tenant on the lease
-    const nameMatch = leaseNames.some(leaseTenantName => {
-      const matches = leaseTenantName.includes(callerName) || callerName.includes(leaseTenantName);
-      console.log(`   Comparing "${leaseTenantName}" vs "${callerName}": ${matches ? '✓ MATCH' : '✗ no match'}`);
-      // Match if caller name is contained in lease tenant name or vice versa
-      return matches;
-    });
+    let matchedLease = null;
 
-    if (!nameMatch) {
-      console.log('   ❌ Name authentication FAILED');
+    // Iterate through all active leases to find a match
+    for (const lease of leasesResponse.data.data) {
+      console.log(`\n   Checking lease: "${lease.name}"`);
+
+      // Check if lease has tenant information in the name field
+      const leaseName = lease.name?.toLowerCase() || '';
+
+      // Split lease name by common separators (& or ,) to get individual tenant names
+      const leaseNames = leaseName.split(/[&,]/).map(n => n.trim());
+      console.log(`   Lease tenants: ${JSON.stringify(leaseNames)}`);
+
+      // Check if caller's name matches any tenant on this lease
+      const nameMatch = leaseNames.some(leaseTenantName => {
+        const matches = leaseTenantName.includes(callerName) || callerName.includes(leaseTenantName);
+        console.log(`     Comparing "${leaseTenantName}" vs "${callerName}": ${matches ? '✓ MATCH' : '✗ no match'}`);
+        return matches;
+      });
+
+      if (nameMatch) {
+        matchedLease = lease;
+        console.log(`   ✅ MATCH FOUND in lease: "${lease.name}"`);
+        break;  // Stop checking once we find a match
+      }
+    }
+
+    if (!matchedLease) {
+      console.log('\n   ❌ Name authentication FAILED - no matching lease found');
       return {
         authenticated: false,
-        reason: 'Name does not match tenant on lease',
+        reason: 'Name does not match tenant on any lease',
         message: `I'm sorry, I don't show ${tenantName} as a tenant for unit ${unitNumber}. For security reasons, I can only process requests from authorized tenants. Please contact the property manager if you believe this is an error.`
       };
     }
@@ -138,7 +148,7 @@ async function authenticateTenant(unitNumber, tenantName) {
       unitId: unit.id,
       unitName: unit.name,
       propertyId: unit.property,  // Add property ID for linking tasks
-      leaseId: activeLease.id,
+      leaseId: matchedLease.id,
       message: 'Tenant authenticated successfully'
     };
 
