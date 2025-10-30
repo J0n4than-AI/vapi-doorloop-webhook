@@ -55,8 +55,7 @@ async function handleCreateWorkOrder(params) {
   const taskData = {
     subject: `${category} - ${unitNumber}: ${issueDescription.substring(0, 50)}${issueDescription.length > 50 ? '...' : ''}`,
     description: `Tenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nReported: ${whenStarted || 'Just now'}`,
-    type: 'TENANT_REQUEST',
-    priority: mapUrgencyToPriority(urgency),
+    type: 'WORK_ORDER',
     status: 'NOT_STARTED'
   };
 
@@ -83,8 +82,7 @@ async function handleEscalateToEmergency(params) {
   const taskData = {
     subject: `🚨 EMERGENCY - ${category} - ${unitNumber}`,
     description: `⚠️ EMERGENCY MAINTENANCE REQUEST ⚠️\n\nTenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nSafety Notes:\n${safetyNotes || 'None provided'}\n\nEXPECTED RESPONSE: Vendor should arrive within 1-2 hours\nEXPECTED CALLBACK: Vendor should call tenant within 15 minutes`,
-    type: 'TENANT_REQUEST',
-    priority: 'High',
+    type: 'WORK_ORDER',
     status: 'NOT_STARTED'
   };
 
@@ -226,7 +224,6 @@ async function handleReopenWorkOrder(params) {
 
     const updateData = {
       status: 'NOT_STARTED',
-      priority: mapUrgencyToPriority(urgency),
       description: currentDescription + reopenSection
     };
 
@@ -252,8 +249,7 @@ async function handleScheduleInspection(params) {
   const taskData = {
     subject: `Manager Inspection Required - Unit ${unitNumber} - ${inspectionType}`,
     description: `📋 MANAGER INSPECTION REQUESTED\n\nRelated Work Order: ${relatedTaskId}\nInspection Type: ${inspectionType}\nUnit: ${unitNumber}\n\nReason:\n${reason}\n\nTenant Availability:\n${tenantAvailability}\n\nThis inspection was scheduled by MaintenanceBot during followup verification. Please complete inspection within 3-5 business days and update this task with findings.`,
-    type: 'TENANT_REQUEST',
-    priority: 'Medium',
+    type: 'WORK_ORDER',
     status: 'NOT_STARTED'
   };
 
