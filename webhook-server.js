@@ -69,13 +69,24 @@ async function authenticateTenant(unitNumber, tenantName) {
       };
     }
 
-    const unit = unitsResponse.data.data.find(u =>
-      u.name?.toLowerCase().includes(unitNumber.toLowerCase()) ||
-      u.reference?.toLowerCase() === unitNumber.toLowerCase()
+    // Try exact match first (case-insensitive)
+    const unitLower = unitNumber.toLowerCase();
+    let unit = unitsResponse.data.data.find(u =>
+      u.name?.toLowerCase() === unitLower ||
+      u.reference?.toLowerCase() === unitLower
     );
+
+    // If no exact match, try partial match (contains)
+    if (!unit) {
+      unit = unitsResponse.data.data.find(u =>
+        u.name?.toLowerCase().includes(unitLower) ||
+        u.reference?.toLowerCase().includes(unitLower)
+      );
+    }
 
     if (!unit) {
       console.log('   ❌ Unit not matched in results');
+      console.log('   Units in search:', unitsResponse.data.data.map(u => u.name).join(', '));
       return {
         authenticated: false,
         reason: 'Unit not found',
