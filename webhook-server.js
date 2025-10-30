@@ -518,12 +518,17 @@ async function handleScheduleInspection(params) {
 
 // Main webhook endpoint
 app.post('/vapi/webhook', async (req, res) => {
-  console.log('Received webhook from VAPI:', JSON.stringify(req.body, null, 2));
+  const timestamp = new Date().toISOString();
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`📞 WEBHOOK RECEIVED at ${timestamp}`);
+  console.log(`${'='.repeat(80)}`);
+  console.log('Full request body:', JSON.stringify(req.body, null, 2));
 
   try {
     const { message } = req.body;
 
     if (!message || message.type !== 'function-call') {
+      console.error('❌ Invalid request: Missing or wrong message type');
       return res.status(400).json({
         error: 'Invalid request: Expected function-call message type'
       });
@@ -532,12 +537,17 @@ app.post('/vapi/webhook', async (req, res) => {
     const { functionCall } = message;
     const { name, parameters } = functionCall;
 
+    console.log(`\n🔧 Function called: ${name}`);
+    console.log('Parameters:', JSON.stringify(parameters, null, 2));
+
     let result;
 
     // Route to appropriate handler
     switch (name) {
       case 'createWorkOrder':
+        console.log('→ Routing to handleCreateWorkOrder');
         result = await handleCreateWorkOrder(parameters);
+        console.log('← handleCreateWorkOrder result:', JSON.stringify(result, null, 2));
         break;
 
       case 'escalateToEmergency':
@@ -571,12 +581,24 @@ app.post('/vapi/webhook', async (req, res) => {
     }
 
     // Return success response
+    console.log(`\n✅ SUCCESS - Returning result to VAPI`);
+    console.log(`${'='.repeat(80)}\n`);
     res.json({
       result: result
     });
 
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error(`\n${'='.repeat(80)}`);
+    console.error('❌ ERROR PROCESSING WEBHOOK');
+    console.error(`${'='.repeat(80)}`);
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    if (error.response) {
+      console.error('API Error Response:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.error(`${'='.repeat(80)}\n`);
+
     res.status(500).json({
       error: 'Internal server error',
       message: error.message,
