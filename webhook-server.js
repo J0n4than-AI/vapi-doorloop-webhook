@@ -55,8 +55,9 @@ async function handleCreateWorkOrder(params) {
   const taskData = {
     subject: `${category} - ${unitNumber}: ${issueDescription.substring(0, 50)}${issueDescription.length > 50 ? '...' : ''}`,
     description: `Tenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nReported: ${whenStarted || 'Just now'}`,
+    type: 'TENANT_REQUEST',
     priority: mapUrgencyToPriority(urgency),
-    status: 'Not Started'
+    status: 'NOT_STARTED'
   };
 
   try {
@@ -82,8 +83,9 @@ async function handleEscalateToEmergency(params) {
   const taskData = {
     subject: `🚨 EMERGENCY - ${category} - ${unitNumber}`,
     description: `⚠️ EMERGENCY MAINTENANCE REQUEST ⚠️\n\nTenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nSafety Notes:\n${safetyNotes || 'None provided'}\n\nEXPECTED RESPONSE: Vendor should arrive within 1-2 hours\nEXPECTED CALLBACK: Vendor should call tenant within 15 minutes`,
+    type: 'TENANT_REQUEST',
     priority: 'High',
-    status: 'Not Started'
+    status: 'NOT_STARTED'
   };
 
   try {
@@ -184,7 +186,7 @@ async function handleConfirmCompletion(params) {
     const feedbackSection = `\n\n--- TENANT FEEDBACK (${getCurrentDate()}) ---\nIssue Resolved: ${issueResolved}\nQuality Rating: ${qualityRating}/5\nInspection Required: ${inspectionRequired}\n\nFeedback:\n${feedbackNotes}\n\nTenant Confirmed: ${tenantConfirmed}\nCompleted by: MaintenanceBot Followup`;
 
     const updateData = {
-      status: 'Completed',
+      status: 'COMPLETED',
       description: currentDescription + feedbackSection
     };
 
@@ -223,7 +225,7 @@ async function handleReopenWorkOrder(params) {
     const reopenSection = `\n\n--- WORK ORDER REOPENED (${getCurrentDate()}) ---\n⚠️ ISSUE NOT RESOLVED - VENDOR MUST RETURN\n\nReason for Reopening:\n${reason}\n\nTenant Availability:\n${tenantAvailability || 'Not specified'}\n\nUrgency: ${urgency}\n\nNote: This is a rework. Original issue was not fully resolved. No additional cost to tenant.`;
 
     const updateData = {
-      status: 'Not Started',
+      status: 'NOT_STARTED',
       priority: mapUrgencyToPriority(urgency),
       description: currentDescription + reopenSection
     };
@@ -250,8 +252,9 @@ async function handleScheduleInspection(params) {
   const taskData = {
     subject: `Manager Inspection Required - Unit ${unitNumber} - ${inspectionType}`,
     description: `📋 MANAGER INSPECTION REQUESTED\n\nRelated Work Order: ${relatedTaskId}\nInspection Type: ${inspectionType}\nUnit: ${unitNumber}\n\nReason:\n${reason}\n\nTenant Availability:\n${tenantAvailability}\n\nThis inspection was scheduled by MaintenanceBot during followup verification. Please complete inspection within 3-5 business days and update this task with findings.`,
+    type: 'TENANT_REQUEST',
     priority: 'Medium',
-    status: 'Not Started'
+    status: 'NOT_STARTED'
   };
 
   try {
