@@ -137,6 +137,7 @@ async function authenticateTenant(unitNumber, tenantName) {
       authenticated: true,
       unitId: unit.id,
       unitName: unit.name,
+      propertyId: unit.property,  // Add property ID for linking tasks
       leaseId: activeLease.id,
       message: 'Tenant authenticated successfully'
     };
@@ -171,11 +172,15 @@ async function handleCreateWorkOrder(params) {
     subject: `${category} - ${unitNumber}: ${issueDescription.substring(0, 50)}${issueDescription.length > 50 ? '...' : ''}`,
     description: `Tenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nReported: ${whenStarted || 'Just now'}`,
     type: 'WORK_ORDER',
-    status: 'NOT_STARTED'
+    status: 'NOT_STARTED',
+    unit: authResult.unitId,  // Link to the authenticated unit
+    property: authResult.propertyId || undefined  // Link to property if available
   };
 
   try {
+    console.log('Creating DoorLoop task:', JSON.stringify(taskData, null, 2));
     const response = await doorloopClient.post('/tasks', taskData);
+    console.log('✅ Task created:', response.data.id);
 
     return {
       success: true,
@@ -185,8 +190,13 @@ async function handleCreateWorkOrder(params) {
       message: 'Work order created successfully in DoorLoop'
     };
   } catch (error) {
-    console.error('Error creating work order:', error.response?.data || error.message);
-    throw error;
+    console.error('❌ Error creating work order:', error.response?.data || error.message);
+    return {
+      success: false,
+      error: 'Failed to create work order',
+      details: error.response?.data || error.message,
+      message: 'I apologize, but I encountered a technical issue while creating your work order. Please contact the property manager directly, or try again in a few minutes.'
+    };
   }
 }
 
@@ -210,7 +220,9 @@ async function handleEscalateToEmergency(params) {
     subject: `🚨 EMERGENCY - ${category} - ${unitNumber}`,
     description: `⚠️ EMERGENCY MAINTENANCE REQUEST ⚠️\n\nTenant: ${tenantName}\nPhone: ${tenantPhone}\nUnit: ${unitNumber}\nCategory: ${category}\n\nIssue Description:\n${issueDescription}\n\nSafety Notes:\n${safetyNotes || 'None provided'}\n\nEXPECTED RESPONSE: Vendor should arrive within 1-2 hours\nEXPECTED CALLBACK: Vendor should call tenant within 15 minutes`,
     type: 'WORK_ORDER',
-    status: 'NOT_STARTED'
+    status: 'NOT_STARTED',
+    unit: authResult.unitId,  // Link to the authenticated unit
+    property: authResult.propertyId || undefined  // Link to property if available
   };
 
   try {
