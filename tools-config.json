@@ -1,0 +1,291 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "createWorkOrder",
+        "description": "Creates a new maintenance work order in the system. Use this tool after collecting all required information from the tenant (unit number, name, phone, issue description). This tool should be used for NON-EMERGENCY maintenance requests.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "unitNumber": {
+              "type": "string",
+              "description": "The tenant's unit number (e.g., '101', 'A-205', 'Building 3, Unit 12')"
+            },
+            "tenantName": {
+              "type": "string",
+              "description": "Full name of the tenant reporting the issue"
+            },
+            "tenantPhone": {
+              "type": "string",
+              "description": "Best phone number to reach the tenant"
+            },
+            "issueDescription": {
+              "type": "string",
+              "description": "Detailed description of the maintenance issue, including location, what's happening, and severity"
+            },
+            "urgency": {
+              "type": "string",
+              "enum": ["urgent", "standard", "low"],
+              "description": "Urgency level: 'urgent' (2-hour response), 'standard' (24-hour response), 'low' (3-5 days)"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["plumbing", "electrical", "hvac", "appliance", "security", "general"],
+              "description": "Category of the maintenance issue"
+            },
+            "whenStarted": {
+              "type": "string",
+              "description": "When the tenant first noticed the issue (optional)"
+            }
+          },
+          "required": ["unitNumber", "tenantName", "tenantPhone", "issueDescription", "urgency", "category"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/work-orders",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "escalateToEmergency",
+        "description": "Escalates a maintenance request to emergency status and triggers immediate emergency dispatch workflow. Use this ONLY for true emergencies: HVAC failure in extreme temperatures, major water leaks/flooding, complete power outage, gas leaks, or security issues. This will trigger the emergency coordinator workflow.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order ID that was created (if already created)"
+            },
+            "unitNumber": {
+              "type": "string",
+              "description": "The tenant's unit number"
+            },
+            "tenantName": {
+              "type": "string",
+              "description": "Tenant's full name"
+            },
+            "tenantPhone": {
+              "type": "string",
+              "description": "Best phone number to reach the tenant"
+            },
+            "issueDescription": {
+              "type": "string",
+              "description": "Detailed description of the emergency, including safety concerns"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["hvac", "plumbing", "electrical", "gas", "security"],
+              "description": "Emergency category"
+            },
+            "safetyNotes": {
+              "type": "string",
+              "description": "Any safety concerns: children, elderly, pets, extent of issue, weather conditions"
+            }
+          },
+          "required": ["unitNumber", "tenantName", "tenantPhone", "issueDescription", "category"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/emergency/escalate",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "dispatchEmergencyVendor",
+        "description": "Dispatches an on-call emergency vendor immediately. Use this tool ONLY in emergency mode after providing safety guidance to the tenant. The system will contact the on-call vendor via SMS, push notification, and phone call, expecting acceptance within 5 minutes.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order ID"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["hvac", "plumbing", "electrical", "security", "gas"],
+              "description": "Emergency category for vendor selection"
+            },
+            "arrivalTimeEstimate": {
+              "type": "string",
+              "enum": ["30min", "1hour", "2hours"],
+              "description": "Estimated arrival time: '30min' (vendor nearby), '1hour' (standard), '2hours' (vendor farther away)"
+            },
+            "safetyNotes": {
+              "type": "string",
+              "description": "Important details for vendor: family situation, extent of issue, weather conditions, tenant location if evacuated"
+            }
+          },
+          "required": ["workOrderId", "category", "arrivalTimeEstimate"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/emergency/dispatch",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "provideStatus",
+        "description": "Checks the status of an emergency dispatch and provides current ETA. Use this when tenant asks for an update, or if more than 20 minutes have passed since dispatch without vendor callback.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dispatchId": {
+              "type": "string",
+              "description": "The dispatch ID returned from dispatchEmergencyVendor"
+            }
+          },
+          "required": ["dispatchId"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/emergency/status",
+        "method": "GET",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "confirmCompletion",
+        "description": "Confirms work order completion and closes it with tenant feedback. Use this in followup mode when tenant confirms the issue is resolved and they're satisfied. This will permanently close the work order.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order ID being closed"
+            },
+            "tenantConfirmed": {
+              "type": "boolean",
+              "description": "Whether tenant confirmed completion (should always be true when calling this)"
+            },
+            "issueResolved": {
+              "type": "boolean",
+              "description": "Whether the issue is fully resolved"
+            },
+            "qualityRating": {
+              "type": "integer",
+              "enum": [1, 2, 3, 4, 5],
+              "description": "Quality rating: 5 (excellent), 4 (good), 3 (okay), 2 (poor), 1 (very poor)"
+            },
+            "feedbackNotes": {
+              "type": "string",
+              "description": "Summary of tenant's feedback in 1-2 sentences. Include comments about technician professionalism, timeliness, work quality, and any concerns."
+            },
+            "inspectionRequired": {
+              "type": "boolean",
+              "description": "Whether a manager inspection is needed. True for major repairs (>$500), tenant concerns, or quality issues."
+            }
+          },
+          "required": ["workOrderId", "tenantConfirmed", "issueResolved", "qualityRating", "feedbackNotes", "inspectionRequired"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/work-orders/complete",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "reopenWorkOrder",
+        "description": "Reopens a work order that was marked complete but the issue is NOT actually resolved. Use this in followup mode when tenant reports the problem still exists or wasn't fixed properly. This notifies the vendor they must return at no additional cost.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order ID to reopen"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Detailed reason for reopening, including what's still wrong and any new symptoms"
+            },
+            "urgency": {
+              "type": "string",
+              "enum": ["emergency", "urgent", "standard"],
+              "description": "Urgency level for the rework: 'emergency' (same as original emergency), 'urgent' (2-hour response), 'standard' (24 hours)"
+            },
+            "tenantAvailability": {
+              "type": "string",
+              "description": "When the tenant is available for the vendor to return"
+            }
+          },
+          "required": ["workOrderId", "reason", "urgency"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/work-orders/reopen",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "scheduleInspection",
+        "description": "Schedules a manager inspection of completed work. Use this in followup mode for major repairs (>$500), when tenant has concerns about work quality, or when final approval is needed before closing the work order.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order ID requiring inspection"
+            },
+            "inspectionType": {
+              "type": "string",
+              "enum": ["quality_check", "tenant_concern", "final_approval", "damage_assessment"],
+              "description": "Type of inspection: 'quality_check' (major repair), 'tenant_concern' (tenant reported issues), 'final_approval' (>$500 repairs), 'damage_assessment' (additional work needed)"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Reason for the inspection (e.g., 'Major HVAC repair over $500', 'Tenant reports new leak after repair')"
+            },
+            "tenantAvailability": {
+              "type": "string",
+              "description": "When tenant is available for the 10-minute inspection"
+            }
+          },
+          "required": ["workOrderId", "inspectionType", "reason", "tenantAvailability"]
+        }
+      },
+      "server": {
+        "url": "https://api.aictive.com/maintenance/inspections/schedule",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{API_KEY}}"
+        }
+      }
+    }
+  ]
+}

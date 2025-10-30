@@ -1,0 +1,31 @@
+{
+  "name": "vapi-doorloop-webhook",
+  "version": "1.0.0",
+  "description": "Webhook server that connects VAPI MaintenanceBot to DoorLoop API",
+  "main": "webhook-server.js",
+  "scripts": {
+    "start": "node webhook-server.js",
+    "dev": "nodemon webhook-server.js",
+    "test": "node webhook-server.js"
+  },
+  "keywords": [
+    "vapi",
+    "doorloop",
+    "webhook",
+    "property-management",
+    "maintenance"
+  ],
+  "author": "Aictive Management",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.13.1",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

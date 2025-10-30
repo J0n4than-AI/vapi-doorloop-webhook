@@ -1,0 +1,333 @@
+{
+  "doorloop_api_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+  "doorloop_base_url": "https://app.doorloop.com/api",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "createWorkOrder",
+        "description": "Creates a new maintenance work order in DoorLoop. Use this tool after collecting all required information from the tenant (unit number, name, phone, issue description). This tool should be used for NON-EMERGENCY maintenance requests.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "unitNumber": {
+              "type": "string",
+              "description": "The tenant's unit number (e.g., '101', 'A-205', 'Building 3, Unit 12')"
+            },
+            "tenantName": {
+              "type": "string",
+              "description": "Full name of the tenant reporting the issue"
+            },
+            "tenantPhone": {
+              "type": "string",
+              "description": "Best phone number to reach the tenant"
+            },
+            "issueDescription": {
+              "type": "string",
+              "description": "Detailed description of the maintenance issue, including location, what's happening, and severity"
+            },
+            "urgency": {
+              "type": "string",
+              "enum": ["urgent", "standard", "low"],
+              "description": "Urgency level: 'urgent' (2-hour response, High priority), 'standard' (24-hour response, Medium priority), 'low' (3-5 days, Low priority)"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["plumbing", "electrical", "hvac", "appliance", "security", "general"],
+              "description": "Category of the maintenance issue"
+            },
+            "whenStarted": {
+              "type": "string",
+              "description": "When the tenant first noticed the issue (optional)"
+            }
+          },
+          "required": ["unitNumber", "tenantName", "tenantPhone", "issueDescription", "urgency", "category"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "subject": "{{category}} - {{unitNumber}}: {{issueDescription}}",
+          "description": "Tenant: {{tenantName}}\nPhone: {{tenantPhone}}\nUnit: {{unitNumber}}\nCategory: {{category}}\n\nIssue Description:\n{{issueDescription}}\n\nReported: {{whenStarted}}",
+          "priority": "{{#if (eq urgency 'urgent')}}High{{else if (eq urgency 'standard')}}Medium{{else}}Low{{/if}}",
+          "status": "Not Started"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "escalateToEmergency",
+        "description": "Escalates a maintenance request to emergency status and creates a high-priority task in DoorLoop. Use this ONLY for true emergencies: HVAC failure in extreme temperatures, major water leaks/flooding, complete power outage, gas leaks, or security issues.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "unitNumber": {
+              "type": "string",
+              "description": "The tenant's unit number"
+            },
+            "tenantName": {
+              "type": "string",
+              "description": "Tenant's full name"
+            },
+            "tenantPhone": {
+              "type": "string",
+              "description": "Best phone number to reach the tenant"
+            },
+            "issueDescription": {
+              "type": "string",
+              "description": "Detailed description of the emergency, including safety concerns"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["hvac", "plumbing", "electrical", "gas", "security"],
+              "description": "Emergency category"
+            },
+            "safetyNotes": {
+              "type": "string",
+              "description": "Any safety concerns: children, elderly, pets, extent of issue, weather conditions"
+            }
+          },
+          "required": ["unitNumber", "tenantName", "tenantPhone", "issueDescription", "category"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "subject": "🚨 EMERGENCY - {{category}} - {{unitNumber}}",
+          "description": "⚠️ EMERGENCY MAINTENANCE REQUEST ⚠️\n\nTenant: {{tenantName}}\nPhone: {{tenantPhone}}\nUnit: {{unitNumber}}\nCategory: {{category}}\n\nIssue Description:\n{{issueDescription}}\n\nSafety Notes:\n{{safetyNotes}}\n\nEXPECTED RESPONSE: Vendor should arrive within 1-2 hours\nEXPECTED CALLBACK: Vendor should call tenant within 15 minutes",
+          "priority": "High",
+          "status": "Not Started"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "dispatchEmergencyVendor",
+        "description": "Creates a high-priority emergency task in DoorLoop. Use this tool ONLY in emergency mode after providing safety guidance to the tenant. Note: Vendor assignment will be handled manually by property manager.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workOrderId": {
+              "type": "string",
+              "description": "The work order/task ID from DoorLoop (if already created)"
+            },
+            "category": {
+              "type": "string",
+              "enum": ["hvac", "plumbing", "electrical", "security", "gas"],
+              "description": "Emergency category for vendor selection"
+            },
+            "arrivalTimeEstimate": {
+              "type": "string",
+              "enum": ["30min", "1hour", "2hours"],
+              "description": "Estimated arrival time: '30min' (vendor nearby), '1hour' (standard), '2hours' (vendor farther away)"
+            },
+            "safetyNotes": {
+              "type": "string",
+              "description": "Important details for vendor: family situation, extent of issue, weather conditions, tenant location if evacuated"
+            },
+            "tenantPhone": {
+              "type": "string",
+              "description": "Tenant's phone number for vendor callback"
+            }
+          },
+          "required": ["category", "arrivalTimeEstimate", "tenantPhone"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks/{{workOrderId}}/updates",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "content": "✅ EMERGENCY DISPATCHED\n\nCategory: {{category}}\nEstimated Arrival: {{arrivalTimeEstimate}}\nTenant Contact: {{tenantPhone}}\n\nSafety Notes:\n{{safetyNotes}}\n\n⚠️ ACTION REQUIRED: Property manager must assign vendor and ensure callback within 15 minutes\n\nStatus: Emergency coordinator has confirmed dispatch to tenant"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "provideStatus",
+        "description": "Retrieves the current status of a task/work order from DoorLoop. Use this when tenant asks for an update, or if more than 20 minutes have passed since dispatch without vendor callback.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "The DoorLoop task ID to check status on"
+            }
+          },
+          "required": ["taskId"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks/{{taskId}}",
+        "method": "GET",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "confirmCompletion",
+        "description": "Marks a task/work order as completed in DoorLoop and records tenant feedback. Use this in followup mode when tenant confirms the issue is resolved and they're satisfied. This will update the task status to 'Completed'.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "The DoorLoop task ID to close"
+            },
+            "tenantConfirmed": {
+              "type": "boolean",
+              "description": "Whether tenant confirmed completion (should always be true when calling this)"
+            },
+            "issueResolved": {
+              "type": "boolean",
+              "description": "Whether the issue is fully resolved"
+            },
+            "qualityRating": {
+              "type": "integer",
+              "enum": [1, 2, 3, 4, 5],
+              "description": "Quality rating: 5 (excellent), 4 (good), 3 (okay), 2 (poor), 1 (very poor)"
+            },
+            "feedbackNotes": {
+              "type": "string",
+              "description": "Summary of tenant's feedback in 1-2 sentences. Include comments about technician professionalism, timeliness, work quality, and any concerns."
+            },
+            "inspectionRequired": {
+              "type": "boolean",
+              "description": "Whether a manager inspection is needed. True for major repairs (>$500), tenant concerns, or quality issues."
+            }
+          },
+          "required": ["taskId", "tenantConfirmed", "issueResolved", "qualityRating", "feedbackNotes", "inspectionRequired"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks/{{taskId}}",
+        "method": "PUT",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "status": "Completed",
+          "description": "{{description}}\n\n--- TENANT FEEDBACK ({{date}}) ---\nIssue Resolved: {{issueResolved}}\nQuality Rating: {{qualityRating}}/5\nInspection Required: {{inspectionRequired}}\n\nFeedback:\n{{feedbackNotes}}\n\nTenant Confirmed: {{tenantConfirmed}}\nCompleted by: MaintenanceBot Followup"
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "reopenWorkOrder",
+        "description": "Reopens a task/work order in DoorLoop that was marked complete but the issue is NOT actually resolved. Use this in followup mode when tenant reports the problem still exists or wasn't fixed properly. This will update the task status and add notes about the issue.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "The DoorLoop task ID to reopen"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Detailed reason for reopening, including what's still wrong and any new symptoms"
+            },
+            "urgency": {
+              "type": "string",
+              "enum": ["emergency", "urgent", "standard"],
+              "description": "Urgency level for the rework: 'emergency' (same as original emergency), 'urgent' (2-hour response), 'standard' (24 hours)"
+            },
+            "tenantAvailability": {
+              "type": "string",
+              "description": "When the tenant is available for the vendor to return"
+            }
+          },
+          "required": ["taskId", "reason", "urgency"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks/{{taskId}}",
+        "method": "PUT",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "status": "Not Started",
+          "priority": "{{#if (eq urgency 'emergency')}}High{{else if (eq urgency 'urgent')}}High{{else}}Medium{{/if}}",
+          "description": "{{description}}\n\n--- WORK ORDER REOPENED ({{date}}) ---\n⚠️ ISSUE NOT RESOLVED - VENDOR MUST RETURN\n\nReason for Reopening:\n{{reason}}\n\nTenant Availability:\n{{tenantAvailability}}\n\nUrgency: {{urgency}}\n\nNote: This is a rework. Original issue was not fully resolved. No additional cost to tenant."
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "scheduleInspection",
+        "description": "Creates a manager inspection task in DoorLoop. Use this in followup mode for major repairs (>$500), when tenant has concerns about work quality, or when final approval is needed before closing the work order.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "relatedTaskId": {
+              "type": "string",
+              "description": "The original work order/task ID that requires inspection"
+            },
+            "inspectionType": {
+              "type": "string",
+              "enum": ["quality_check", "tenant_concern", "final_approval", "damage_assessment"],
+              "description": "Type of inspection: 'quality_check' (major repair), 'tenant_concern' (tenant reported issues), 'final_approval' (>$500 repairs), 'damage_assessment' (additional work needed)"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Reason for the inspection (e.g., 'Major HVAC repair over $500', 'Tenant reports new leak after repair')"
+            },
+            "tenantAvailability": {
+              "type": "string",
+              "description": "When tenant is available for the 10-minute inspection"
+            },
+            "unitNumber": {
+              "type": "string",
+              "description": "Unit number for the inspection"
+            }
+          },
+          "required": ["relatedTaskId", "inspectionType", "reason", "tenantAvailability", "unitNumber"]
+        }
+      },
+      "server": {
+        "url": "https://app.doorloop.com/api/tasks",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoiQVBJIiwiaWQiOiI2OGVlNmZiYjIxYjI0MjkxYjdmZTM4ODgiLCJleHAiOjIwNzU4MTY2MzV9.6D_BgXStGG-yVE5dogTmp_KQ7So0GRhtOBXbMUyLS1I",
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "bodyTemplate": {
+          "subject": "Manager Inspection Required - Unit {{unitNumber}} - {{inspectionType}}",
+          "description": "📋 MANAGER INSPECTION REQUESTED\n\nRelated Work Order: {{relatedTaskId}}\nInspection Type: {{inspectionType}}\nUnit: {{unitNumber}}\n\nReason:\n{{reason}}\n\nTenant Availability:\n{{tenantAvailability}}\n\nThis inspection was scheduled by MaintenanceBot during followup verification. Please complete inspection within 3-5 business days and update this task with findings.",
+          "priority": "Medium",
+          "status": "Not Started"
+        }
+      }
+    }
+  ]
+}
